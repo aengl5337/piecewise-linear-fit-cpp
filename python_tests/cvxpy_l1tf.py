@@ -262,7 +262,17 @@ def PWLF(Y, initial_breaks=None, weights=None):
             sigma = abs(initial_breaks[1] - initial_breaks[0])/2  # narrow Gaussian around breakpoints, and ensure don't overlap too much
             for brk in initial_breaks:
                 w += amplitude * np.exp(-0.5 * ((t - brk) / sigma) ** 2)
-        
+        elif weights == 'gaussian_breaks_and_endpoints':
+            if initial_breaks is None:
+                raise ValueError("initial_breaks must be provided for 'gaussian_breaks_and_endpoints' weighting.")
+            w = np.ones(n)
+            amplitude = 10.0  # peak additional weighting at breakpoints and endpoints
+            sigma = abs(initial_breaks[1] - initial_breaks[0])/2  # narrow Gaussian around breakpoints, and ensure don't overlap too much
+            for brk in initial_breaks:
+                w += amplitude * np.exp(-0.5 * ((t - brk) / sigma) ** 2)
+            # Add Gaussian weighting at endpoints
+            w += amplitude * np.exp(-0.5 * ((t - t.min()) / sigma) ** 2)
+            w += amplitude * np.exp(-0.5 * ((t - t.max()) / sigma) ** 2)
         else:
             raise ValueError("Invalid weights option specified.")
         
@@ -276,11 +286,10 @@ def PWLF(Y, initial_breaks=None, weights=None):
     
     # initialize piecewise linear fit with your t and y data
     my_pwlf = pwlf.PiecewiseLinFit(t, y, weights=w)
-
     # fit the data for 2 breakpoints if have a guess, which leads to 3 line segments intrinsically (start/end included automatically). else fit explicitly for 3 line segments
     if initial_breaks is not None:
         # res = my_pwlf.fit_with_breaks(initial_breaks) # fit with user-defined breakpoints, these are not varied
-        res = my_pwlf.fit_guess(initial_breaks)  # fit with user-defined number of line segments, breakpoints are optimized
+        res = my_pwlf.fit_guess(initial_breaks) # fit with user-defined number of line segments, breakpoints are optimized
     else:
         res = my_pwlf.fit(3)
 
@@ -291,13 +300,25 @@ def PWLF(Y, initial_breaks=None, weights=None):
     return np.column_stack((that, yhat)), my_pwlf
 
 def main():
-    # Load Loading vs Displacement characteristic data for RHC
-    Y = np.loadtxt('rhc_deflection.txt')
+    # # Load Loading vs Displacement characteristic data for RHC
+    # Y = np.loadtxt('rhc_deflection.txt')
+
+    # Dummy data that resembles a RHC calibration curve (data proprietary)
+    n = 1640
+    x = np.linspace(-100, 100, n)
+    # Create a shape with a steep center and linear sides
+    y = 0.5 * x + 30 * np.tanh(0.2 * x) + np.random.normal(0, 2.0, n)
+    Y = np.column_stack((x, y))
+
+    # Preprocess data (remove duplicates, smooth, etc.)
     Y, Y_rough = preprocess(Y) # Y is now smoothed
     t = Y[:, 0]
     y = Y[:, 1]
 
-    data_dict = {'Original Signal': Y_rough, 'Smoothed Signal': Y}
+    data_dict = {
+        'Original Signal': Y_rough, 
+        'Smoothed Signal': Y,
+        }
 
     # Set standard lambda proportion
     plambda = 0.01
@@ -391,7 +412,7 @@ def main():
         print("Fitting PWLF using RDP-detected kinks as initial breakpoints...")
         initial_breaks = simplified_trajectory[1:-1, 0]  # t-values of detected kinks (exclude start/end)... should be 2 floats
         start_time = time.perf_counter()
-        Yhat_pwlf_rdp, pwlf_model_rdp = PWLF(Y, initial_breaks=initial_breaks, weights='gaussian_breaks')
+        Yhat_pwlf_rdp, pwlf_model_rdp = PWLF(Y, initial_breaks=initial_breaks, weights='gaussian_breaks_and_endpoints')
         end_time = time.perf_counter()
         execution_time_1 = end_time - start_time
         print(f"PWLF 2 kink fit with RDP init (and weighting): {execution_time_1:.6f} seconds")
@@ -400,7 +421,7 @@ def main():
         print("Skipping PWLF with RDP breakpoints due to insufficient points found.")
 
 
-    
+
 
     # PLOT RESULTS
     plot_trend(data_dict, plambda=plambda)

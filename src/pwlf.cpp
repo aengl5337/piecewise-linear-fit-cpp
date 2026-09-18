@@ -77,14 +77,15 @@ public:
         // Initialize Population (pop_size x n_internal_breaks)
         vector<VectorXd> population(pop_size);
         vector<double> fitness(pop_size);
-
+        
         for (int i = 0; i < pop_size; ++i) {
-            population[i].resize(n_internal_breaks);
+            // Expand the empty population to be a (pop_size)-vector of (n_internal_breaks)-vectors
+            population[i].resize(n_internal_breaks); // Each individual is a vector of breakpoints, and .resize is used with VectorXd objects
             for (int j = 0; j < n_internal_breaks; ++j) {
-                population[i][j] = dis(gen);
+                population[i][j] = dis(gen); // Actually generate the pseudo-random number to store in population
             }
-            // Sort initial genes to make them valid breakpoints
-            std::sort(population[i].data(), population[i].data() + population[i].size());
+            // Sort initial genes to make them valid breakpoints (std::sort() works with pointers as input)
+            std::sort(population[i].data(), population[i].data() + population[i].size()); // .data() returns a pointer to the underlying array of the Eigen vector, allowing std::sort to operate on it.
             fitness[i] = cost_function(population[i]);
         }
 
